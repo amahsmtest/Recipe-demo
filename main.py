@@ -3,240 +3,267 @@ import requests
 import os
 
 app = Flask(__name__)
-app.secret_key = 'supersecretkey'  # keep for session favorites
+app.secret_key = 'supersecretkey'
 
-API_KEY = os.environ.get("SPOONACULAR_API_KEY")  # Your existing env var line (left untouched)
+API_KEY = os.environ.get("SPOONACULAR_API_KEY")  # Leave this line untouched as requested
 
-# -------------------------
-# HTML Templates (modern Tailwind + Alpine.js)
-# -------------------------
+# ----------- HTML TEMPLATES WITH TAILWIND & ALPINE DARK MODE -----------
 
 HOME_TEMPLATE = '''
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth dark" x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }" :class="darkMode ? 'dark' : ''" x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val))">
+<html lang="en" 
+      x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }" 
+      :class="darkMode ? 'dark' : ''" 
+      x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val))">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Smart Recipe App</title>
+  <script>
+    tailwind.config = { darkMode: 'class' }
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script>
+    // Instant dark mode flash fix before Alpine loads
+    if(localStorage.getItem('darkMode') === 'true') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  </script>
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
-  <header class="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow sticky top-0 z-10">
-    <h1 class="text-3xl font-extrabold tracking-tight">🍽️ Smart Recipe App</h1>
-    <button @click="darkMode = !darkMode" :aria-label="darkMode ? 'Switch to light mode' : 'Switch to dark mode'" 
-      class="p-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-700 transition" x-text="darkMode ? '☀️ Light' : '🌙 Dark'"></button>
-  </header>
-  <main class="flex-grow max-w-4xl mx-auto px-4 py-8 sm:py-12">
-    <form method="POST" class="mb-8 flex gap-4">
-      <input name="ingredients" placeholder="Enter ingredients (comma-separated)" value="{{ ingredients|e }}"
-             class="flex-grow px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400" required />
-      <button type="submit"
-              class="bg-indigo-600 text-white px-6 py-3 rounded-lg text-lg font-semibold hover:bg-indigo-700 transition">Search</button>
+  <div class="max-w-5xl mx-auto px-4 py-8 flex-grow">
+    <header class="flex justify-between items-center mb-8">
+      <h1 class="text-4xl font-extrabold tracking-tight">🍽️ Smart Recipe App</h1>
+      <button 
+        @click="darkMode = !darkMode"
+        class="rounded px-3 py-2 border border-gray-400 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+        x-text="darkMode ? '🌙 Dark' : '☀️ Light'">
+      </button>
+    </header>
+
+    <form method="POST" class="flex gap-4 mb-10">
+      <input
+        type="text"
+        name="ingredients"
+        value="{{ ingredients }}"
+        placeholder="Enter ingredients, e.g. chicken, rice"
+        required
+        class="flex-grow rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      />
+      <button
+        type="submit"
+        class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-6 py-2 font-semibold transition"
+      >
+        Search
+      </button>
     </form>
+
     {% if error %}
       <p class="text-red-500 mb-6">{{ error }}</p>
     {% endif %}
+
     {% if recipes %}
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         {% for recipe in recipes %}
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden flex flex-col">
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden flex flex-col">
             <img src="{{ recipe.image }}" alt="{{ recipe.title }}" class="w-full h-48 object-cover" />
             <div class="p-4 flex flex-col flex-grow">
-              <h2 class="text-xl font-semibold mb-2">{{ recipe.title }}</h2>
-              <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Used Ingredients: {{ recipe.usedIngredientCount }} | Missed: {{ recipe.missedIngredientCount }}</p>
-              <div class="mt-auto flex justify-between items-center">
-                <a href="/recipe/{{ recipe.id }}" class="text-indigo-600 font-semibold hover:underline">View Details</a>
-                <a href="/add_to_favorites/{{ recipe.id }}" class="text-green-600 font-semibold hover:underline text-sm">+ Favorite</a>
-              </div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-    <nav class="mt-12 flex justify-between text-lg font-semibold">
-      <a href="/favorites" class="text-blue-600 hover:underline">❤️ Favorites</a>
-      <a href="/shopping-list" class="text-blue-600 hover:underline">🛒 Shopping List</a>
-    </nav>
-  </main>
-  <footer class="text-center p-4 text-gray-500 text-sm select-none">© 2025 Smart Recipe App</footer>
-</body>
-</html>
-'''
-
-RECIPE_DETAIL_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="en" x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }" :class="darkMode ? 'dark' : ''" x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val))">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ recipe.title|e }}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-</head>
-<body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col px-6 py-8">
-  <header class="flex justify-between items-center mb-6">
-    <h1 class="text-4xl font-extrabold">{{ recipe.title }}</h1>
-    <button @click="darkMode = !darkMode" :aria-label="darkMode ? 'Switch to light mode' : 'Switch to dark mode'" 
-      class="p-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-700 transition" x-text="darkMode ? '☀️ Light' : '🌙 Dark'"></button>
-  </header>
-  <main class="max-w-3xl mx-auto flex-grow">
-    <img src="{{ recipe.image }}" alt="{{ recipe.title }}" class="rounded-lg shadow mb-8 w-full max-h-96 object-cover" />
-    <section class="mb-8">
-      <h2 class="text-2xl font-semibold mb-3">Ingredients</h2>
-      <ul class="list-disc list-inside space-y-1 text-lg">
-        {% for ing in recipe.extendedIngredients %}
-          <li>{{ ing.original }}</li>
-        {% endfor %}
-      </ul>
-    </section>
-    <section class="mb-8">
-      <h2 class="text-2xl font-semibold mb-3">Instructions</h2>
-      {% if recipe.instructions %}
-        <div class="prose dark:prose-invert max-w-none text-lg" x-html="`{{ recipe.instructions | replace('\\n', '<br>')|replace('\r', '')|replace("`", '&#96;') }}`"></div>
-      {% else %}
-        <p class="italic text-gray-500 dark:text-gray-400">No instructions available.</p>
-      {% endif %}
-    </section>
-    <a href="/" class="inline-block text-blue-600 hover:underline font-semibold mb-8">← Back to Search</a>
-  </main>
-  <footer class="text-center p-4 text-gray-500 text-sm select-none">© 2025 Smart Recipe App</footer>
-</body>
-</html>
-'''
-
-FAVORITES_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="en" x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }" :class="darkMode ? 'dark' : ''" x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val))">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Favorites - Smart Recipe App</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-</head>
-<body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col px-6 py-8">
-  <header class="flex justify-between items-center mb-8">
-    <h1 class="text-4xl font-extrabold">❤️ Your Favorite Recipes</h1>
-    <button @click="darkMode = !darkMode" :aria-label="darkMode ? 'Switch to light mode' : 'Switch to dark mode'" 
-      class="p-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-700 transition" x-text="darkMode ? '☀️ Light' : '🌙 Dark'"></button>
-  </header>
-  <main class="flex-grow max-w-4xl mx-auto">
-    {% if recipes %}
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-        {% for recipe in recipes %}
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden flex flex-col">
-            <img src="{{ recipe.image }}" alt="{{ recipe.title }}" class="w-full h-48 object-cover" />
-            <div class="p-4 flex flex-col flex-grow">
-              <h2 class="text-xl font-semibold mb-2">{{ recipe.title }}</h2>
-              <div class="mt-auto flex justify-between items-center">
-                <a href="/recipe/{{ recipe.id }}" class="text-indigo-600 font-semibold hover:underline">View Details</a>
-                <a href="/remove_from_favorites/{{ recipe.id }}" class="text-red-600 font-semibold hover:underline text-sm">Remove</a>
+              <h2 class="text-lg font-semibold mb-2">{{ recipe.title }}</h2>
+              <div class="mt-auto space-x-2">
+                <a href="/recipe/{{ recipe.id }}" 
+                   class="inline-block text-indigo-600 hover:text-indigo-800 font-semibold transition">
+                  View Details
+                </a>
+                <a href="/add_to_favorites/{{ recipe.id }}" 
+                   class="inline-block text-green-600 hover:text-green-800 font-semibold transition text-sm">
+                  + Favorites
+                </a>
               </div>
             </div>
           </div>
         {% endfor %}
       </div>
     {% else %}
-      <p class="text-center text-gray-500 dark:text-gray-400 text-lg">You have no favorites yet.</p>
+      <p class="text-gray-500 dark:text-gray-400 text-center mt-16">Try searching with some ingredients above.</p>
     {% endif %}
-    <nav class="mt-12 text-center">
-      <a href="/" class="text-blue-600 hover:underline font-semibold">← Back to Home</a>
-    </nav>
-  </main>
-  <footer class="text-center p-4 text-gray-500 text-sm select-none">© 2025 Smart Recipe App</footer>
+
+    <footer class="mt-16 flex justify-center gap-6 text-sm text-indigo-600">
+      <a href="/favorites" class="hover:underline">❤️ Favorites</a>
+      <a href="/shopping-list" class="hover:underline">🛒 Shopping List</a>
+    </footer>
+  </div>
+</body>
+</html>
+'''
+
+RECIPE_DETAIL_TEMPLATE = '''
+<!DOCTYPE html>
+<html lang="en" 
+      x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }" 
+      :class="darkMode ? 'dark' : ''" 
+      x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val))">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ recipe.title }}</title>
+  <script>
+    tailwind.config = { darkMode: 'class' }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    if(localStorage.getItem('darkMode') === 'true') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  </script>
+</head>
+<body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen px-6 py-8">
+  <div class="max-w-4xl mx-auto">
+    <header class="flex justify-between items-center mb-8">
+      <h1 class="text-4xl font-extrabold tracking-tight">{{ recipe.title }}</h1>
+      <button 
+        @click="darkMode = !darkMode"
+        class="rounded px-3 py-2 border border-gray-400 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+        x-text="darkMode ? '🌙 Dark' : '☀️ Light'">
+      </button>
+    </header>
+
+    <img src="{{ recipe.image }}" alt="{{ recipe.title }}" class="rounded-lg shadow-lg mb-8 w-full max-h-96 object-cover" />
+
+    <div class="mb-6">
+      <h2 class="text-2xl font-semibold mb-2">Ingredients</h2>
+      <ul class="list-disc list-inside space-y-1 text-lg">
+        {% for ing in recipe.extendedIngredients %}
+          <li>{{ ing.original }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="mb-6">
+      <h2 class="text-2xl font-semibold mb-2">Instructions</h2>
+      {% if recipe.instructions %}
+        <p class="prose max-w-none dark:prose-invert">{{ recipe.instructions | safe }}</p>
+      {% else %}
+        <p class="italic text-gray-500 dark:text-gray-400">No instructions available.</p>
+      {% endif %}
+    </div>
+
+    <a href="/" class="inline-block mt-6 text-indigo-600 hover:underline text-lg font-semibold">← Back to Search</a>
+  </div>
+</body>
+</html>
+'''
+
+FAVORITES_TEMPLATE = '''
+<!DOCTYPE html>
+<html lang="en" 
+      x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }" 
+      :class="darkMode ? 'dark' : ''" 
+      x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val))">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Favorites</title>
+  <script>
+    tailwind.config = { darkMode: 'class' }
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    if(localStorage.getItem('darkMode') === 'true') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  </script>
+</head>
+<body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen px-6 py-8">
+  <div class="max-w-5xl mx-auto">
+    <header class="flex justify-between items-center mb-8">
+      <h1 class="text-4xl font-extrabold tracking-tight">❤️ Your Favorite Recipes</h1>
+      <button 
+        @click="darkMode = !darkMode"
+        class="rounded px-3 py-2 border border-gray-400 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+        x-text="darkMode ? '🌙 Dark' : '☀️ Light'">
+      </button>
+    </header>
+
+    {% if recipes %}
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+        {% for recipe in recipes %}
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden flex flex-col">
+            <img src="{{ recipe.image }}" alt="{{ recipe.title }}" class="w-full h-48 object-cover" />
+            <div class="p-4 flex flex-col flex-grow">
+              <h2 class="text-lg font-semibold mb-2">{{ recipe.title }}</h2>
+              <div class="mt-auto space-x-2">
+                <a href="/recipe/{{ recipe.id }}" 
+                   class="inline-block text-indigo-600 hover:text-indigo-800 font-semibold transition">
+                  View Details
+                </a>
+                <a href="/remove_from_favorites/{{ recipe.id }}" 
+                   class="inline-block text-red-600 hover:text-red-800 font-semibold transition text-sm">
+                  Remove
+                </a>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-gray-500 dark:text-gray-400 text-center mt-20">No favorite recipes yet.</p>
+    {% endif %}
+
+    <a href="/" class="inline-block mt-12 text-indigo-600 hover:underline text-lg font-semibold">← Back to Home</a>
+  </div>
 </body>
 </html>
 '''
 
 SHOPPING_LIST_TEMPLATE = '''
 <!DOCTYPE html>
-<html lang="en" x-data="shopApp()" :class="darkMode ? 'dark' : ''" x-init="init()">
+<html lang="en" 
+      x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }" 
+      :class="darkMode ? 'dark' : ''" 
+      x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val))">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Shopping List - Smart Recipe App</title>
+  <title>Shopping List</title>
+  <script>
+    tailwind.config = { darkMode: 'class' }
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-  <style>
-    .dark ::-webkit-scrollbar {
-      width: 8px;
+  <script>
+    if(localStorage.getItem('darkMode') === 'true') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
     }
-    .dark ::-webkit-scrollbar-thumb {
-      background-color: #555;
-      border-radius: 4px;
-    }
-  </style>
+  </script>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+<body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen px-6 py-8">
+  <div class="max-w-2xl mx-auto">
+    <h1 class="text-4xl font-extrabold mb-8">🛒 Your Shopping List</h1>
 
-<header class="flex justify-between items-center p-4 bg-white dark:bg-gray-800 shadow sticky top-0 z-10">
-  <h1 class="text-xl font-extrabold tracking-tight">🛒 Shopping List</h1>
-  <button @click="toggleDark()" :aria-label="darkMode ? 'Switch to light mode' : 'Switch to dark mode'" 
-    class="p-2 rounded-md hover:bg-gray-300 dark:hover:bg-gray-700 transition" x-text="darkMode ? '☀️ Light' : '🌙 Dark'"></button>
-</header>
+    {% if items %}
+      <ul class="list-disc list-inside space-y-2 text-lg">
+        {% for item in items %}
+          <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-gray-500 dark:text-gray-400 italic text-center mt-20">Your shopping list is empty.</p>
+    {% endif %}
 
-<main class="flex-grow max-w-3xl mx-auto px-4 py-6 sm:py-12">
-  <template x-if="items.length === 0">
-    <p class="text-center text-gray-500 dark:text-gray-400 mt-12 text-lg">Your shopping list is empty.</p>
-  </template>
-  <ul class="list-disc list-inside space-y-2" x-show="items.length > 0" tabindex="0">
-    <template x-for="(item, idx) in items" :key="idx">
-      <li class="flex justify-between items-center rounded bg-white dark:bg-gray-800 p-3 shadow">
-        <span x-text="item"></span>
-        <button @click="removeItem(idx)" aria-label="Remove item" 
-          class="text-red-600 hover:text-red-400 focus:outline-none text-lg leading-none">×</button>
-      </li>
-    </template>
-  </ul>
-
-  <form @submit.prevent="addItem" class="mt-6 flex gap-3">
-    <input type="text" x-model="newItem" placeholder="Add new item" required
-      class="flex-grow rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 text-lg" />
-    <button type="submit" 
-      class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-6 py-2 transition">Add</button>
-  </form>
-
-  <nav class="mt-12 flex justify-center">
-    <a href="/" class="text-indigo-600 hover:underline font-semibold focus:outline-none">← Back to Home</a>
-  </nav>
-</main>
-
-<footer class="text-center p-4 text-gray-500 text-sm select-none">© 2025 Smart Recipe App</footer>
-
-<script>
-  function shopApp() {
-    return {
-      darkMode: false,
-      items: JSON.parse(localStorage.getItem('shoppingList') || '[]'),
-      newItem: '',
-      init() {
-        this.darkMode = localStorage.getItem('darkMode') === 'true';
-      },
-      toggleDark() {
-        this.darkMode = !this.darkMode;
-        localStorage.setItem('darkMode', this.darkMode);
-      },
-      addItem() {
-        if (!this.newItem.trim()) return;
-        this.items.push(this.newItem.trim());
-        localStorage.setItem('shoppingList', JSON.stringify(this.items));
-        this.newItem = '';
-      },
-      removeItem(index) {
-        this.items.splice(index, 1);
-        localStorage.setItem('shoppingList', JSON.stringify(this.items));
-      }
-    }
-  }
-</script>
+    <a href="/" class="inline-block mt-12 text-indigo-600 hover:underline text-lg font-semibold">← Back to Home</a>
+  </div>
 </body>
 </html>
 '''
 
-# -------------------------
-# Flask Routes
-# -------------------------
+# ----------- ROUTES -----------
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -253,7 +280,7 @@ def index():
             response.raise_for_status()
             recipes = response.json()
         except Exception as e:
-            error = f"Error fetching recipes: {str(e)}"
+            error = f"Error: {str(e)}"
     return render_template_string(HOME_TEMPLATE, recipes=recipes, error=error, ingredients=ingredients)
 
 @app.route('/recipe/<int:recipe_id>')
@@ -266,7 +293,12 @@ def recipe_detail(recipe_id):
         response.raise_for_status()
         recipe = response.json()
     except Exception as e:
-        return f"<h3>Error fetching recipe details:</h3><pre>{e}</pre>", 500
+        recipe = {
+            "title": "Error loading recipe",
+            "extendedIngredients": [],
+            "instructions": f"Could not load details: {str(e)}",
+            "image": ""
+        }
     return render_template_string(RECIPE_DETAIL_TEMPLATE, recipe=recipe)
 
 @app.route('/add_to_favorites/<int:recipe_id>')
@@ -298,17 +330,26 @@ def favorites():
             res.raise_for_status()
             recipes.append(res.json())
         except:
-            pass  # skip if error
+            pass
     return render_template_string(FAVORITES_TEMPLATE, recipes=recipes)
 
 @app.route('/shopping-list')
-def shopping_list_page():
-    # Shopping list is stored in browser localStorage, so server just renders page
-    return render_template_string(SHOPPING_LIST_TEMPLATE)
+def shopping_list():
+    items = session.get('shopping_list', [])
+    return render_template_string(SHOPPING_LIST_TEMPLATE, items=items)
 
-# -------------------------
-# Run app
-# -------------------------
+# Optional: add API endpoint for favorites if you want JSON for frontend (not mandatory)
+@app.route("/recipe-json/<int:recipe_id>")
+def recipe_json(recipe_id):
+    detail_url = f"https://api.spoonacular.com/recipes/{recipe_id}/information"
+    params = {"apiKey": API_KEY}
+    try:
+        res = requests.get(detail_url, params=params)
+        if res.status_code != 200:
+            return {}, 404
+        return res.json()
+    except:
+        return {}, 500
 
 if __name__ == "__main__":
     app.run(debug=True)
