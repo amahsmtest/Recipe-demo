@@ -1,2 +1,4 @@
-flask
-requests
+/main.py
+/requirements.txt
+/static/
+/templates/
