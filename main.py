@@ -273,3 +273,31 @@ def index():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=3000)
+@app.route("/debug")
+def debug():
+    if not SPOONACULAR_API_KEY:
+        return "<h3>❌ API key not found. Please set SPOONACULAR_API_KEY as an environment variable.</h3>"
+
+    # Test API call to Spoonacular
+    test_url = "https://api.spoonacular.com/recipes/complexSearch"
+    params = {
+        "apiKey": SPOONACULAR_API_KEY,
+        "query": "pasta",
+        "number": 1
+    }
+
+    try:
+        res = requests.get(test_url, params=params)
+        if res.status_code != 200:
+            return f"<h3>⚠️ API returned status {res.status_code}</h3><pre>{res.text}</pre>"
+
+        data = res.json()
+        recipe_titles = [r['title'] for r in data.get("results", [])]
+
+        if not recipe_titles:
+            return "<h3>⚠️ API returned no recipes — check your quota or API key validity.</h3>"
+
+        return f"<h3>✅ API Key working!</h3><p>Sample recipe: <strong>{recipe_titles[0]}</strong></p>"
+
+    except Exception as e:
+        return f"<h3>🚨 Error while contacting Spoonacular:</h3><pre>{e}</pre>"
