@@ -1,4 +1,3 @@
-/main.py
-/requirements.txt
-/static/
-/templates/
+Flask
+requests
+gunicorn
